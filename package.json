@@ -1,24 +1,15 @@
 {
-  "name": "lng-mail",
+  "name": "lamp-glow-email-api",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/M-Arbaz/Lng-Mail-Service.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/M-Arbaz/Lng-Mail-Service/issues"
-  },
-  "homepage": "https://github.com/M-Arbaz/Lng-Mail-Service#readme",
+  "private": true,
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
   "dependencies": {
-    "nodemailer": "^10.3.1"
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "nodemailer": "^6.10.1"
   }
 }
