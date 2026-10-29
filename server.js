@@ -1,23 +1,27 @@
-"use strict";
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
-const nodemailer = require("nodemailer");
+
+require('dotenv').config();
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const nodemailer = require('nodemailer');
+
 const app = express();
-app.disable("x-powered-by");
-app.use(helmet());
-app.use(express.json({ limit: "30kb" }));
-const PORT = Number(process.env.PORT || 3000);
+
+// Allowed frontend origins
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// Security middleware
+app.use(helmet());
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header (e.g. health checks)
+      // Allow requests without Origin, such as server-side health checks
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -26,67 +30,227 @@ app.use(
     },
   })
 );
-const SMTP_HOST = process.env.SMTP_HOST || "smtp.hostinger.com";
-const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-const SMTP_USER = (process.env.SMTP_USER || "").trim();
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "arbazirfan14@gmail.com").trim();
-if (!FRONTEND_ORIGIN || !SMTP_USER || !SMTP_PASS) {
-  console.error("Missing required environment variables: FRONTEND_ORIGIN, SMTP_USER, SMTP_PASS.");
-  process.exit(1);
-}
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || origin === FRONTEND_ORIGIN) return callback(null, true);
-    return callback(new Error("Origin not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-  optionsSuccessStatus: 204
-}));
-app.use("/api/", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-7", legacyHeaders: false }));
+
+app.use(express.json({ limit: '100kb' }));
+
+// Rate limiting
+app.use(
+  '/api/',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
+// Email transporter
 const transporter = nodemailer.createTransport({
-  host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
-  auth: { user: SMTP_USER, pass: SMTP_PASS },
-  connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 20000
+  host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: Number(process.env.SMTP_PORT || 465) === 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 });
-function esc(v) { return String(v ?? "").replace(/[&<>\"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
-function val(v, fallback = "—") { const s = String(v ?? "").trim(); return s || fallback; }
-function money(v) { const n = Number(v); return Number.isFinite(n) ? `PKR ${n.toLocaleString("en-PK", { maximumFractionDigits: 2 })}` : "—"; }
-function validEmail(v) { return typeof v === "string" && v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
-function buildEmail(o) {
-  const address = [o.addressLine1, o.addressLine2, o.city, o.state, o.postalCode].filter(Boolean).map(esc).join(", ");
-  const rows = o.items.map(i => {
-    const qty = Math.max(1, Math.min(999, Number.parseInt(i.quantity, 10) || 1));
-    const opts = [i.colorVariant, i.shadeColor, i.bulbOption].filter(Boolean).map(esc).join(" / ");
-    return `<tr><td style="padding:10px;border-bottom:1px solid #eee">${esc(val(i.name, "Product"))}${opts ? `<br><small>${opts}</small>` : ""}</td><td style="padding:10px;text-align:center;border-bottom:1px solid #eee">${qty}</td><td style="padding:10px;text-align:right;border-bottom:1px solid #eee">${esc(money(i.unitPrice ?? i.price))}</td></tr>`;
-  }).join("");
-  const details = [["Order ID", val(o.orderId)], ["Customer", val(o.fullName)], ["Email", val(o.email)], ["Phone", val(o.phone)], ["Address", address || "—"], ["Payment method", val(o.paymentMethod)], ["Order status", val(o.status, "Placed")]]
-    .map(([k, v]) => `<tr><td style="padding:7px 10px;color:#666">${esc(k)}</td><td style="padding:7px 10px">${v}</td></tr>`).join("");
-  const html = `<div style="font-family:Arial,sans-serif;color:#222;max-width:720px;margin:auto"><h2>Lamp &amp; Glow — Order ${esc(o.orderId)}</h2><p>Thank you for shopping with Lamp &amp; Glow.</p><table style="border-collapse:collapse;width:100%;margin:18px 0">${details}</table><h3>Order items</h3><table style="border-collapse:collapse;width:100%"><thead><tr><th style="padding:10px;text-align:left;border-bottom:2px solid #ddd">Product</th><th style="padding:10px;border-bottom:2px solid #ddd">Qty</th><th style="padding:10px;text-align:right;border-bottom:2px solid #ddd">Unit price</th></tr></thead><tbody>${rows}</tbody></table><table style="border-collapse:collapse;width:100%;margin-top:18px"><tr><td style="padding:6px 10px">Subtotal</td><td style="padding:6px 10px;text-align:right">${esc(money(o.subtotal))}</td></tr><tr><td style="padding:6px 10px">Discount</td><td style="padding:6px 10px;text-align:right">- ${esc(money(o.discountAmount || 0))}</td></tr><tr><td style="padding:6px 10px">Shipping</td><td style="padding:6px 10px;text-align:right">${esc(money(o.shipping || 0))}</td></tr><tr><td style="padding:10px;border-top:2px solid #222;font-weight:bold">Total</td><td style="padding:10px;border-top:2px solid #222;text-align:right;font-weight:bold">${esc(money(o.total))}</td></tr></table>${o.note ? `<p><strong>Order note:</strong> ${esc(o.note)}</p>` : ""}<p style="color:#777;font-size:12px">Automated message from Lamp &amp; Glow.</p></div>`;
-  const plainItems = o.items.map(i => `- ${val(i.name, "Product")} x ${Number.parseInt(i.quantity, 10) || 1} — ${money(i.unitPrice ?? i.price)}`).join("\n");
-  const text = [`Lamp & Glow — Order ${val(o.orderId)}`, `Customer: ${val(o.fullName)}`, `Email: ${val(o.email)}`, `Phone: ${val(o.phone)}`, `Address: ${address || "—"}`, `Payment: ${val(o.paymentMethod)}`, "", "Items:", plainItems, "", `Subtotal: ${money(o.subtotal)}`, `Discount: ${money(o.discountAmount || 0)}`, `Shipping: ${money(o.shipping || 0)}`, `Total: ${money(o.total)}`].join("\n");
-  return { html, text };
-}
-app.get("/", (_req, res) => res.json({ success: true, service: "Lamp & Glow Email API", status: "running" }));
-app.get("/health", (_req, res) => res.json({ success: true, status: "ok" }));
-app.post("/api/notify-order", async (req, res) => {
-  const o = req.body || {}, email = typeof o.email === "string" ? o.email.trim() : "", orderId = typeof o.orderId === "string" ? o.orderId.trim() : "";
-  if (!orderId || orderId.length > 120) return res.status(400).json({ success: false, message: "A valid orderId is required." });
-  if (!validEmail(email)) return res.status(400).json({ success: false, message: "A valid customer email is required." });
-  if (!Array.isArray(o.items) || o.items.length < 1 || o.items.length > 100) return res.status(400).json({ success: false, message: "Order must contain 1 to 100 items." });
-  const { html, text } = buildEmail(o);
+
+// Basic status endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'Lamp & Glow Email API is running',
+  });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'Lamp & Glow Email API',
+  });
+});
+
+// Send order notification emails
+app.post('/api/notify-order', async (req, res) => {
   try {
-    await transporter.sendMail({ from: { name: "Lamp & Glow", address: SMTP_USER }, to: ADMIN_EMAIL, replyTo: email, subject: `New order received: ${orderId}`, text, html });
-    await transporter.sendMail({ from: { name: "Lamp & Glow", address: SMTP_USER }, to: email, subject: `Order confirmation — ${orderId}`, text: `Hi ${val(o.fullName, "there")},\nThank you for your order. We have received it.\n\n${text}`, html: `<div style="font-family:Arial,sans-serif"><p>Hi ${esc(val(o.fullName, "there"))},</p><p>Thank you for your order. We have received it.</p>${html}</div>` });
-    return res.json({ success: true, message: "Admin and customer emails sent." });
-  } catch (e) {
-    console.error("Email sending failed:", e?.message || e);
-    return res.status(502).json({ success: false, message: "Could not send emails. Check SMTP configuration and server logs." });
+    const {
+      orderId,
+      fullName,
+      email,
+      phone,
+      addressLine1,
+      addressLine2,
+      city,
+      state,
+      postalCode,
+      note,
+      paymentMethod,
+      status,
+      items,
+      subtotal,
+      discountAmount,
+      shipping,
+      total,
+    } = req.body || {};
+
+    // Validate required fields
+    if (
+      !orderId ||
+      typeof orderId !== 'string' ||
+      orderId.length > 200 ||
+      !email ||
+      typeof email !== 'string' ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !Array.isArray(items) ||
+      items.length === 0 ||
+      items.length > 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid orderId, email and items are required.',
+      });
+    }
+
+    // Format order items for email
+    const itemsHtml = items
+      .map((item) => {
+        const name = String(item.name || item.title || 'Product')
+          .slice(0, 200);
+        const quantity = Number(item.quantity || 1);
+        const price = Number(item.price || 0);
+
+        return `
+          <tr>
+            <td>${escapeHtml(name)}</td>
+            <td>${Number.isFinite(quantity) ? quantity : 1}</td>
+            <td>${Number.isFinite(price) ? price.toFixed(2) : '0.00'}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const safe = (value) => escapeHtml(
+      value === undefined || value === null ? '' : String(value)
+    );
+
+    const address = [
+      addressLine1,
+      addressLine2,
+      city,
+      state,
+      postalCode,
+    ]
+      .filter(Boolean)
+      .map(safe)
+      .join(', ');
+
+    const orderDetailsHtml = `
+      <h2>Order #${safe(orderId)}</h2>
+      <p><strong>Customer:</strong> ${safe(fullName)}</p>
+      <p><strong>Email:</strong> ${safe(email)}</p>
+      <p><strong>Phone:</strong> ${safe(phone)}</p>
+      <p><strong>Address:</strong> ${address || 'Not provided'}</p>
+      <p><strong>Payment method:</strong> ${safe(paymentMethod)}</p>
+      <p><strong>Order status:</strong> ${safe(status || 'pending')}</p>
+      ${note ? `<p><strong>Note:</strong> ${safe(note)}</p>` : ''}
+
+      <table border="1" cellpadding="8" cellspacing="0">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Quantity</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+
+      <p><strong>Subtotal:</strong> ${safe(subtotal)}</p>
+      <p><strong>Discount:</strong> ${safe(discountAmount)}</p>
+      <p><strong>Shipping:</strong> ${safe(shipping)}</p>
+      <p><strong>Total:</strong> ${safe(total)}</p>
+    `;
+
+    // Send admin notification
+    await transporter.sendMail({
+      from: `"Lamp & Glow" <${process.env.SMTP_USER}>`,
+      to: process.env.ADMIN_EMAIL,
+      subject: `New Order #${orderId}`,
+      html: `
+        <h1>New order received</h1>
+        ${orderDetailsHtml}
+      `,
+    });
+
+    // Send customer confirmation
+    await transporter.sendMail({
+      from: `"Lamp & Glow" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: `Order Confirmation #${orderId}`,
+      html: `
+        <h1>Thank you for your order, ${safe(fullName || 'Customer')}!</h1>
+        <p>We have received your order. Here are your order details:</p>
+        ${orderDetailsHtml}
+        <p>If you have any questions, please contact info@lampandglow.pk.</p>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Order notification and customer confirmation emails sent.',
+      orderId,
+    });
+  } catch (error) {
+    console.error('Order email error:', error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to send order emails.',
+    });
   }
 });
-app.use((err, _req, res, _next) => {
-  if (err?.message === "Origin not allowed by CORS") return res.status(403).json({ success: false, message: "Origin not allowed." });
-  console.error("Request error:", err?.message || err); return res.status(400).json({ success: false, message: "Invalid request." });
+
+// Escape user-provided text before inserting it into HTML
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Handle malformed JSON and other errors
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  if (err.message === 'Origin not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'Origin not allowed.',
+    });
+  }
+
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON body.',
+    });
+  }
+
+  console.error('Application error:', err.message);
+
+  return res.status(500).json({
+    success: false,
+    message: 'Internal server error.',
+  });
 });
-app.listen(PORT, "0.0.0.0", () => console.log(`Lamp & Glow Email API listening on port ${PORT}`));
+
+// Start server using Hostinger's assigned port
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Lamp & Glow Email API running on port ${PORT}`);
+});
