@@ -56,7 +56,7 @@ const transporter = nodemailer.createTransport({
 
 // Brand settings
 const BRAND = {
-  name: 'LAMP & GLOW',
+  name: 'LAMP and GLOW',
   website: 'https://lampandglow.pk',
   email: 'info@lampandglow.pk',
   gold: '#C6A15B',
@@ -269,14 +269,14 @@ function customerDetails(data) {
 // Status endpoints
 app.get('/', (req, res) => {
   res.status(200).json({
-    message: 'Lamp & Glow Email API is running',
+    message: 'Lamp and Glow Email API is running',
   });
 });
 
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
-    service: 'Lamp & Glow Email API',
+    service: 'Lamp and Glow Email API',
   });
 });
 
@@ -358,7 +358,7 @@ app.post('/api/notify-order', async (req, res) => {
       </h1>
 
       <p style="margin:0;text-align:center;color:#888;font-size:13px;line-height:1.7;">
-        A new order has been placed on your Lamp & Glow store.
+        A new order has been placed on your Lamp and Glow store.
       </p>
 
       <div style="margin-top:25px;padding:15px;background:#f7f5f0;text-align:center;">
@@ -379,7 +379,7 @@ app.post('/api/notify-order', async (req, res) => {
       ${orderSummary(order)}
 
       <p style="margin:25px 0 0;color:#999;font-size:11px;text-align:center;">
-        This is an automated notification from your Lamp & Glow store.
+        This is an automated notification from your Lamp and Glow store.
       </p>
     `;
 
@@ -395,7 +395,7 @@ app.post('/api/notify-order', async (req, res) => {
         </h1>
 
         <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:#777;">
-          Your order has been received successfully. We're delighted that you chose Lamp & Glow.
+          Your order has been received successfully. We're delighted that you chose Lamp and Glow.
         </p>
       </div>
 
@@ -437,17 +437,17 @@ app.post('/api/notify-order', async (req, res) => {
 
     // Send admin notification
     await transporter.sendMail({
-      from: `"Lamp & Glow" <${process.env.SMTP_USER}>`,
+      from: `"Lamp and Glow" <${process.env.SMTP_USER}>`,
       to: process.env.ADMIN_EMAIL,
-      subject: `New Order #${orderId} | Lamp & Glow`,
+      subject: `New Order #${orderId} | Lamp and Glow`,
       html: emailLayout(adminContent),
     });
 
     // Send customer confirmation
     await transporter.sendMail({
-      from: `"Lamp & Glow" <${process.env.SMTP_USER}>`,
+      from: `"Lamp and Glow" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `Your Order #${orderId} is Confirmed | Lamp & Glow`,
+      subject: `Your Order #${orderId} is Confirmed | Lamp and Glow`,
       html: emailLayout(customerContent),
     });
 
@@ -499,5 +499,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Lamp & Glow Email API running on port ${PORT}`);
+  console.log(`Lamp and Glow Email API running on port ${PORT}`);
 });
